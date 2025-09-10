@@ -1,0 +1,16 @@
+{
+  "name": "tsxpress",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "tsxpress": "./main.js"
+  },
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["express", "typescript", "cli", "scaffold", "starter"],
+  "author": "Your Name",
+  "license": "ISC",
+  "description": "A CLI tool to scaffold Express + TypeScript projects"
+}
