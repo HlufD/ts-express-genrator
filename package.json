@@ -1,9 +1,9 @@
 {
-  "name": "tsxpress",
+  "name": "tsxpress-generator",
   "version": "1.0.0",
   "type": "module",
   "bin": {
-    "tsxpress": "main.js"
+    "tsxpress-generator": "main.js"
   },
   "main": "main.js",
   "scripts": {
