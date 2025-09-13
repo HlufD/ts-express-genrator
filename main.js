@@ -3,23 +3,35 @@
 import { execSync } from "child_process";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
 import readline from "readline";
+import { EventEmitter } from "events";
+
+function logStep(message) {
+    console.log(`👉 ${message}`);
+}
+
+function logSuccess(message) {
+    console.log(`✅ ${message}`);
+}
+
+function logWarn(message) {
+    console.warn(`⚠️ ${message}`);
+}
+
+function logError(message) {
+    console.error(`❌ ${message}`);
+}
+
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
 
-
-/**
- * Initializes a new Git repository with a .gitignore file.
- * @returns {void}
- */
-
 function createGitAndIgnore() {
-    console.log("🔧 Initializing Git...");
-    safeExec("git init");
+    logStep("Initializing Git...");
+    safeExec("git init", true);
 
-    console.log("🔧 Creating .gitignore...");
+    logStep("Creating .gitignore...");
     const gitignoreContent = `
 # Node.js dependencies
 node_modules/
@@ -36,47 +48,27 @@ logs/
 Thumbs.db
 `;
     writeFileSync(".gitignore", gitignoreContent.trim());
-    console.log("✅ Git initialized and .gitignore created");
+    logSuccess("Git initialized and .gitignore created");
 }
-
-/**
- * Reads a JSON file from the file system.
- * If the file does not exist, returns an empty object.
- * If the file exists but cannot be parsed, logs a warning and returns an empty object.
- * @param {string} filePath - path to the file to read
- * @returns {object} parsed JSON object
- */
 
 function readJson(filePath) {
     if (!existsSync(filePath)) return {};
     try {
         return JSON.parse(readFileSync(filePath, "utf8"));
     } catch (err) {
-        console.warn(`⚠️ Failed to parse ${filePath}, using empty object.`);
+        logWarn(`Failed to parse ${filePath}, using empty object.`);
         return {};
     }
 }
 
-/** 
- * Run a command with output piped to the main process, and exit 1 if the command fails.
- * @param {string} command - The command to run
- */
-
-function safeExec(command) {
+function safeExec(command, quiet = false) {
     try {
-        execSync(command, { stdio: "inherit" });
+        execSync(command, { stdio: quiet ? "ignore" : "inherit" });
     } catch (err) {
-        console.error(`Command failed: ${command}`);
+        logError(`Command failed: ${command}`);
         process.exit(1);
     }
 }
-
-
-/**
- * Writes a JSON file to the file system.
- * @param {string} filePath - path to the file to write
- * @param {object} data - the JSON data to write
- */
 
 function writeJson(filePath, data) {
     writeFileSync(filePath, JSON.stringify(data, null, 2));
@@ -90,13 +82,6 @@ function removeJsonComments(jsonString) {
         .replace(/,\s*]/g, ']')
         .trim();
 }
-
-/**
- * Sets up the tsconfig.json file.
- * If the file already exists, try to extend the existing configuration with the default values.
- * If the file does not exist, create a new one with the default values.
- * @returns {void}
- */
 
 function setupTsConfig() {
     const tsconfigPath = "tsconfig.json";
@@ -122,20 +107,14 @@ function setupTsConfig() {
             const parsed = JSON.parse(cleanJson);
             tsconfig.compilerOptions = { ...parsed.compilerOptions, ...tsconfig.compilerOptions };
         } catch {
-            console.warn("⚠️ Failed to parse existing tsconfig.json, using default.");
+            logWarn("Failed to parse existing tsconfig.json, using default.");
         }
     }
 
     writeJson(tsconfigPath, tsconfig);
-    console.log("✅ tsconfig.json ready");
+    logSuccess("tsconfig.json ready");
 }
 
-
-/**
- * Creates the main application entrypoint at src/main.ts.
- * @param {string | number} port - the port number to use for the server
- * @returns {void}
- */
 function createSrcMain(port) {
     mkdirSync("src", { recursive: true });
     writeFileSync("src/main.ts", `
@@ -153,48 +132,29 @@ app.listen(port, () => {
     console.log(\`Server running at http://localhost:\${port}\`);
 });
 `);
+    logSuccess("src/main.ts created");
 }
 
-/**
- * Creates a new directory for the project and enters it.
- * @param {string} projectName - the name of the project
- * @returns {void}
- */
 function createProjectDir(projectName) {
     mkdirSync(projectName, { recursive: true });
     process.chdir(projectName);
-    console.log(`📂 Project directory '${projectName}' created and entered`);
+    logSuccess(`Project directory '${projectName}' created and entered`);
 }
-
-
-/**
- * Initializes a new npm project with default values or prompts the user to fill in the package details.
- * @param {boolean} useDefault - whether to use default values or not
- */
 
 function initNpm(useDefault) {
-    console.log("📦 Initializing npm...");
+    logStep("Initializing npm...");
     safeExec(useDefault ? "npm init -y" : "npm init");
+    logSuccess("npm initialized");
 }
-
-
-/**
- * Sets the "type" field of the package.json file to "module".
- * This enables ES module (ESM) support.
- * @returns {void}
- */
 
 function setPackageModule() {
-    console.log("⚙️ Setting package type to module...");
+    logStep("Setting package type to module...");
     safeExec("npm pkg set type=module");
+    logSuccess("Package type set to module");
 }
 
-
-/**
- * Adds npm scripts to the package.json file to run the project in development and production modes.
- * @returns {void}
- */
 function addPackageScripts() {
+    logStep("Adding scripts to package.json...");
     const pkgPath = "package.json";
     const pkg = readJson(pkgPath);
     pkg.scripts = pkg.scripts || {};
@@ -202,76 +162,90 @@ function addPackageScripts() {
     pkg.scripts.build = "tsc";
     pkg.scripts.start = "node dist/main.js";
     writeJson(pkgPath, pkg);
-    console.log("✅ Scripts added to package.json");
+    logSuccess("Scripts added to package.json");
 }
 
-
-/**
- * Creates a new Express + TypeScript project from scratch.
- * @returns {void}
- */
+function configureNodemon() {
+    logStep("Configuring nodemon.json...");
+    writeJson("nodemon.json", {
+        watch: ["src"],
+        ext: "ts",
+        exec: "node --loader ts-node/esm src/main.ts"
+    });
+    logSuccess("nodemon.json created");
+}
 
 function createProject() {
-    rl.question("Enter project name (default: my-app): ", (name) => {
-        const projectName = name.trim() || "my-app";
+    const workflow = new EventEmitter();
 
+    workflow.on("initialize-project", () => {
+        rl.question("Enter project name (default: my-app): ", (name) => {
+            const projectName = name.trim() || "my-app";
+            createProjectDir(projectName);
+            workflow.emit("use-default-npm-init", projectName);
+        })
+    });
+
+    workflow.on("use-default-npm-init", (projectName) => {
         rl.question("Use default npm init? (Y/n): ", (answer) => {
             const useDefault = answer.trim().toLowerCase() !== "n";
-
-            mkdirSync(projectName, { recursive: true });
-            process.chdir(projectName);
-
-            safeExec(useDefault ? "npm init -y" : "npm init");
-
-            safeExec("npm pkg set type=module");
-
-            // Scripts
-            const pkgPath = "package.json";
-            const pkg = readJson(pkgPath);
-            pkg.scripts = pkg.scripts || {};
-            pkg.scripts.dev = "nodemon";
-            pkg.scripts.build = "tsc";
-            pkg.scripts.start = "node dist/main.js";
-            writeJson(pkgPath, pkg);
-            console.log("✅ Scripts added to package.json");
-
-            // Initialize git and create .gitignore
-            createGitAndIgnore();
-
-            // Dependencies
-            safeExec("npm install express");
-            safeExec("npm install -D typescript ts-node nodemon @types/node @types/express");
-
-            safeExec("npx tsc --init");
-            setupTsConfig();
-
-            // nodemon.json
-            writeJson("nodemon.json", {
-                watch: ["src"],
-                ext: "ts",
-                exec: "node --loader ts-node/esm src/main.ts"
-            });
-
-            rl.question("Enter port number (default: 3000): ", (portAnswer) => {
-                const port = portAnswer.trim() || "3000";
-                // src/main.ts
-                createSrcMain(port);
-
-                console.log(`✅ Project ${projectName} created!
-Run:
-cd ${projectName}
-npm run dev
-npm run build
-npm start`);
-
-                rl.close();
-            });
-        });
+            initNpm(useDefault);
+            setPackageModule();
+            workflow.emit("setup-tsconfig", projectName);
+        })
     });
-}
-try {
 
-    createProject();
-} catch (error) {
-    console.log("[error]:", error.message);
+    workflow.on("setup-tsconfig", (projectName) => {
+        setupTsConfig();
+        rl.question("Enter port number (default: 3000): ", (port) => {
+            const portNumber = port.trim() || 3000;
+            createSrcMain(portNumber);
+            workflow.emit("initialize-git", projectName);
+        })
+    });
+
+    workflow.on("initialize-git", (projectName) => {
+        createGitAndIgnore();
+        workflow.emit("install-dependencies", projectName);
+    });
+
+    workflow.on("install-dependencies", (projectName) => {
+        logStep("Installing dependencies...");
+        safeExec("npm install express");
+        safeExec("npm install -D typescript ts-node nodemon @types/node @types/express");
+        logSuccess("Dependencies installed");
+        workflow.emit("add-package-scripts", projectName);
+    });
+
+    workflow.on("add-package-scripts", (projectName) => {
+        addPackageScripts();
+        workflow.emit("configure-nodemon", projectName);
+    });
+
+    workflow.on("configure-nodemon", (projectName) => {
+        configureNodemon();
+        workflow.emit("finish", projectName);
+    });
+
+    workflow.on("finish", (projectName) => {
+        logSuccess(`Project ${projectName} created!`);
+        console.log(`
+Run:
+  cd ${projectName}
+  npm run dev
+  npm run build
+  npm start
+`);
+        console.log("🎉 Project created successfully!");
+        process.exit(0);
+    });
+
+    workflow.on("error", (err) => {
+        logError(`Workflow failed: ${err.message}`);
+        process.exit(1);
+    });
+
+    workflow.emit("initialize-project");
 }
+
+createProject();
